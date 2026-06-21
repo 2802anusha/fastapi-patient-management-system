@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from app.routers import patient as patient_router
+from app.routers import auth as auth_router
 from app.database import engine
-from app.models.patient import Patient  # noqa: F401 — import so Base knows about this model
+from app.models.patient import Patient 
+from app.models.user import User  
 
 from app.database import Base
 
@@ -17,6 +19,7 @@ app = FastAPI(
 
 # Register routers
 app.include_router(patient_router.router)
+app.include_router(auth_router.router)
 
 
 @app.get("/")
