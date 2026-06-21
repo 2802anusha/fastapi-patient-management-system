@@ -4,7 +4,8 @@ import bcrypt
 
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import UserCreate, UserLogin, UserResponse
+from app.schemas.auth import UserCreate, UserLogin, UserResponse, Token
+from app.utils.auth import create_access_token
 
 # Create a router for authentication-related endpoints
 router = APIRouter()
@@ -56,9 +57,9 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 
-@router.post('/login')
+@router.post('/login', response_model=Token)
 def login(user: UserLogin, db: Session = Depends(get_db)):
-    """Login with email and password."""
+    """Login with email and password to get a JWT token."""
 
     # Find user by email
     existing_user = db.query(User).filter(User.email == user.email).first()
@@ -71,5 +72,8 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if not verify_password(user.password, existing_user.password):
         raise HTTPException(status_code=401, detail='Invalid email or password')
 
-    # Login successful
-    return {'message': 'Login successful'}
+    # Generate JWT access token
+    access_token = create_access_token(data={"sub": existing_user.email})
+
+    # Login successful, return token
+    return {"access_token": access_token, "token_type": "bearer"}

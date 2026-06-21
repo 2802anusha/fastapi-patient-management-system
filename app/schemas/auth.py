@@ -23,3 +23,9 @@ class UserResponse(BaseModel):
 
     # Allow Pydantic to read data from SQLAlchemy model attributes
     model_config = {"from_attributes": True}
+
+
+# Schema for login response (JWT token)
+class Token(BaseModel):
+    access_token: str
+    token_type: str

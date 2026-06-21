@@ -3,3 +3,4 @@ pydantic[email]
 uvicorn
 sqlalchemy
 bcrypt
+python-jose[cryptography]

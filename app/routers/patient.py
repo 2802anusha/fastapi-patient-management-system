@@ -4,7 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.schemas.patient import PatientCreate, PatientUpdate, PatientResponse
 from app.models.patient import Patient
+from app.models.user import User
 from app.database import get_db
+from app.utils.auth import get_current_user
 
 # Create a router for all patient-related endpoints
 router = APIRouter()
@@ -28,6 +30,19 @@ def view(db: Session = Depends(get_db)):
 @router.get('/patient/{patient_id}')
 def view_patient(patient_id: str = Path(..., description='ID of the patient in the DB', examples=['P001']), db: Session = Depends(get_db)):
     """Get a specific patient by ID."""
+    # Look up patient by primary key
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+
+    if patient is None:
+        raise HTTPException(status_code=404, detail='Patient not found')
+
+    patient_data = PatientResponse.model_validate(patient)
+    return patient_data.model_dump(exclude=['id'])
+
+
+@router.get('/patients/search')
+def search_patient(patient_id: str = Query(..., description='ID of the patient to search for'), db: Session = Depends(get_db)):
+    """Search for a patient by ID using a query parameter."""
     # Look up patient by primary key
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
 
@@ -69,8 +84,8 @@ def sort_patients(sort_by: str = Query(..., description='Sort on the basis of he
 
 
 @router.post('/create')
-def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
-    """Create a new patient record."""
+def create_patient(patient: PatientCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Create a new patient record. (Requires authentication)"""
 
     # Check if the patient already exists
     existing = db.query(Patient).filter(Patient.id == patient.id).first()
@@ -99,8 +114,8 @@ def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
 
 
 @router.put('/edit/{patient_id}')
-def update_patient(patient_id: str, patient_update: PatientUpdate, db: Session = Depends(get_db)):
-    """Update an existing patient record (partial update)."""
+def update_patient(patient_id: str, patient_update: PatientUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Update an existing patient record (partial update). (Requires authentication)"""
 
     # Find the patient in the database
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
@@ -122,8 +137,8 @@ def update_patient(patient_id: str, patient_update: PatientUpdate, db: Session =
 
 
 @router.delete('/delete/{patient_id}')
-def delete_patient(patient_id: str, db: Session = Depends(get_db)):
-    """Delete a patient record by ID."""
+def delete_patient(patient_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Delete a patient record by ID. (Requires authentication)"""
 
     # Find the patient in the database
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
