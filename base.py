@@ -1,173 +1,192 @@
-from fastapi import FastAPI, Path, HTTPException, Query
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, computed_field
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 from typing import Annotated, Literal, Optional
+from fastapi.params import Body
 import json
 
 app = FastAPI()
 
+
+# -----------------------------
+# Patient Model
+# -----------------------------
 class Patient(BaseModel):
+    name: str
+    city: str
+    age: int
+    gender: Literal['male', 'female', 'other']
+    height: float
+    weight: float
 
-    id: Annotated[str, Field(..., description='ID of the patient', examples=['P001'])]
-    name: Annotated[str, Field(..., description='Name of the patient')]
-    city: Annotated[str, Field(..., description='City where the patient is living')]
-    age: Annotated[int, Field(..., gt=0, lt=120, description='Age of the patient')]
-    gender: Annotated[Literal['male', 'female', 'others'], Field(..., description='Gender of the patient')]
-    height: Annotated[float, Field(..., gt=0, description='Height of the patient in mtrs')]
-    weight: Annotated[float, Field(..., gt=0, description='Weight of the patient in kgs')]
 
-    @computed_field
-    @property
-    def bmi(self) -> float:
-        bmi = round(self.weight/(self.height**2),2)
-        return bmi
-    
-    @computed_field
-    @property
-    def verdict(self) -> str:
-
-        if self.bmi < 18.5:
-            return 'Underweight'
-        elif self.bmi < 25:
-            return 'Normal'
-        elif self.bmi < 30:
-            return 'Normal'
-        else:
-            return 'Obese'
-        
 class PatientUpdate(BaseModel):
-    name: Annotated[Optional[str], Field(default=None)]
-    city: Annotated[Optional[str], Field(default=None)]
-    age: Annotated[Optional[int], Field(default=None, gt=0)]
-    gender: Annotated[Optional[Literal['male', 'female']], Field(default=None)]
-    height: Annotated[Optional[float], Field(default=None, gt=0)]
-    weight: Annotated[Optional[float], Field(default=None, gt=0)]
+    name: Optional[str] = None
+    city: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[Literal['male', 'female', 'other']] = None
+    height: Optional[float] = None
+    weight: Optional[float] = None
 
 
+# -----------------------------
+# Helper Functions
+# -----------------------------
 def load_data():
-    with open('patients.json', 'r') as f:
-        data = json.load(f)
+    try:
+        with open("patients.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
 
-    return data
 
 def save_data(data):
-    with open('patients.json', 'w') as f:
-        json.dump(data, f)
-        
+    with open("patients.json", "w") as f:
+        json.dump(data, f, indent=4)
 
+
+def calculate_bmi(weight, height):
+    return round(weight / (height ** 2), 2)
+
+
+def bmi_verdict(bmi):
+    if bmi < 18.5:
+        return "Underweight"
+    elif bmi < 25:
+        return "Normal"
+    elif bmi < 30:
+        return "Overweight"
+    else:
+        return "Obese"
+
+
+# -----------------------------
+# Home
+# -----------------------------
 @app.get("/")
-def hello():
-    return {'message':'Patient Management System API'}
+def home():
+    return {"message": "Patient Management API Running"}
 
-@app.get('/about')
-def about():
-    return {'message': 'A fully functional API to manage your patient records'}
 
-@app.get('/view')
-def view():
+# -----------------------------
+# View Patients (with Search)
+# -----------------------------
+@app.get("/view")
+def view(
+    name: Optional[str] = Query(
+        default=None,
+        description="Search patient by name"
+    )
+):
     data = load_data()
 
-    return data
+    # Return all patients if no search query
+    if not name:
+        return data
 
-@app.get('/patient/{patient_id}')
-def view_patient(patient_id: str = Path(..., description='ID of the patient in the DB', example='P001')):
-    # load all the patients
+    # Search by patient name (case-insensitive)
+    filtered_data = {
+        patient_id: patient
+        for patient_id, patient in data.items()
+        if name.lower() in patient["name"].lower()
+    }
+
+    return filtered_data
+# -----------------------------
+# Dashboard Analytics
+# -----------------------------
+@app.get("/dashboard")
+def dashboard():
     data = load_data()
 
-    if patient_id in data:
-        return data[patient_id]
-    raise HTTPException(status_code=404, detail='Patient not found')
+    if not data:
+        raise HTTPException(status_code=404, detail="No patient data found.")
 
-@app.get('/sort')
-def sort_patients(sort_by: str = Query(..., description='Sort on the basis of height, weight or bmi'), order: str = Query('asc', description='sort in asc or desc order')):
+    bmi_values = [patient["bmi"] for patient in data.values()]
 
-    valid_fields = ['height', 'weight', 'bmi']
+    total_patients = len(data)
+    average_bmi = round(sum(bmi_values) / total_patients, 2)
+    highest_bmi = max(bmi_values)
+    lowest_bmi = min(bmi_values)
 
-    if sort_by not in valid_fields:
-        raise HTTPException(status_code=400, detail=f'Invalid field select from {valid_fields}')
-    
-    if order not in ['asc', 'desc']:
-        raise HTTPException(status_code=400, detail='Invalid order select between asc and desc')
-    
+    return {
+        "total_patients": total_patients,
+        "average_bmi": average_bmi,
+        "highest_bmi": highest_bmi,
+        "lowest_bmi": lowest_bmi
+    }
+
+
+# -----------------------------
+# Create Patient
+# -----------------------------
+@app.post("/create")
+def create_patient(
+    id: Annotated[str, Body(embed=True)],
+    patient: Patient
+):
     data = load_data()
 
-    sort_order = True if order=='desc' else False
+    if id in data:
+        raise HTTPException(status_code=400, detail="Patient already exists.")
 
-    sorted_data = sorted(data.values(), key=lambda x: x.get(sort_by, 0), reverse=sort_order)
+    bmi = calculate_bmi(patient.weight, patient.height)
 
-    return sorted_data
+    data[id] = {
+        **patient.model_dump(),
+        "bmi": bmi,
+        "verdict": bmi_verdict(bmi)
+    }
 
-@app.post('/create')
-def create_patient(patient: Patient):
-
-    # load existing data
-    data = load_data()
-
-    # check if the patient already exists
-    if patient.id in data:
-        raise HTTPException(status_code=400, detail='Patient already exists')
-
-    # new patient add to the database
-    data[patient.id] = patient.model_dump(exclude=['id'])
-
-    # save into the json file
     save_data(data)
 
-    return JSONResponse(status_code=201, content={'message':'patient created successfully'})
+    return {"message": "Patient created successfully."}
 
 
-@app.put('/edit/{patient_id}')
-def update_patient(patient_id: str, patient_update: PatientUpdate):
+# -----------------------------
+# Update Patient
+# -----------------------------
+@app.put("/edit/{patient_id}")
+def update_patient(patient_id: str, patient: PatientUpdate):
 
     data = load_data()
 
     if patient_id not in data:
-        raise HTTPException(status_code=404, detail='Patient not found')
-    
-    existing_patient_info = data[patient_id]
+        raise HTTPException(status_code=404, detail="Patient not found.")
 
-    updated_patient_info = patient_update.model_dump(exclude_unset=True)
+    stored_patient = data[patient_id]
 
-    for key, value in updated_patient_info.items():
-        existing_patient_info[key] = value
+    update_data = patient.model_dump(exclude_unset=True)
 
-    #existing_patient_info -> pydantic object -> updated bmi + verdict
-    existing_patient_info['id'] = patient_id
-    patient_pydandic_obj = Patient(**existing_patient_info)
-    #-> pydantic object -> dict
-    existing_patient_info = patient_pydandic_obj.model_dump(exclude='id')
+    stored_patient.update(update_data)
 
-    # add this dict to data
-    data[patient_id] = existing_patient_info
+    bmi = calculate_bmi(
+        stored_patient["weight"],
+        stored_patient["height"]
+    )
 
-    # save data
+    stored_patient["bmi"] = bmi
+    stored_patient["verdict"] = bmi_verdict(bmi)
+
+    data[patient_id] = stored_patient
+
     save_data(data)
 
-    return JSONResponse(status_code=200, content={'message':'patient updated'})
+    return {"message": "Patient updated successfully."}
 
-@app.delete('/delete/{patient_id}')
+
+# -----------------------------
+# Delete Patient
+# -----------------------------
+@app.delete("/delete/{patient_id}")
 def delete_patient(patient_id: str):
 
-    # load data
     data = load_data()
 
     if patient_id not in data:
-        raise HTTPException(status_code=404, detail='Patient not found')
-    
+        raise HTTPException(status_code=404, detail="Patient not found.")
+
     del data[patient_id]
 
     save_data(data)
 
-    return JSONResponse(status_code=200, content={'message':'patient deleted'})
-
-
-
-
-
-
-
-
-
-
-
-
+    return {"message": "Patient deleted successfully."}

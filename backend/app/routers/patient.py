@@ -13,18 +13,46 @@ router = APIRouter()
 
 
 @router.get('/view')
-def view(db: Session = Depends(get_db)):
-    """Get all patients."""
-    # Fetch all patients from the database
-    patients = db.query(Patient).all()
+def view(
+    name: str | None = Query(default=None),
+    db: Session = Depends(get_db)
+):
+    if name:
+        patients = db.query(Patient).filter(
+            Patient.name.ilike(f"%{name}%")
+        ).all()
+    else:
+        patients = db.query(Patient).all()
 
-    # Convert each patient to a dict with id as key (same format as before)
     result = {}
+
     for patient in patients:
         patient_data = PatientResponse.model_validate(patient)
         result[patient.id] = patient_data.model_dump(exclude=['id'])
 
     return result
+@router.get('/dashboard')
+def dashboard(db: Session = Depends(get_db)):
+    """Get analytics summary: total patients, average BMI, highest BMI, lowest BMI."""
+    
+    from sqlalchemy import func
+
+    stats = db.query(
+        func.count(Patient.id).label('total_patients'),
+        func.round(func.avg(Patient.bmi), 2).label('average_bmi'),
+        func.max(Patient.bmi).label('highest_bmi'),
+        func.min(Patient.bmi).label('lowest_bmi')
+    ).one()
+
+    if stats.total_patients == 0:
+        raise HTTPException(status_code=404, detail='No patient data found')
+
+    return {
+        'total_patients': stats.total_patients,
+        'average_bmi': stats.average_bmi,
+        'highest_bmi': stats.highest_bmi,
+        'lowest_bmi': stats.lowest_bmi
+    }
 
 
 @router.get('/patient/{patient_id}')

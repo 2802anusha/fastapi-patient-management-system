@@ -6,6 +6,7 @@ from app.database import engine
 from app.models.patient import Patient 
 from app.models.user import User  
 
+
 from app.database import Base
 
 # Create all database tables on startup (if they don't exist yet)

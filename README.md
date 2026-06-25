@@ -101,6 +101,106 @@ This project is separated into two distinct directories: `/backend` and `/fronte
 
 ---
 
+## Running the Backend with Docker (Linux)
+
+### Prerequisites
+
+Make sure Docker and Docker Compose are installed.
+
+Check the installation:
+
+```bash
+docker --version
+docker compose version
+```
+
+### 1. Navigate to the backend directory
+
+```bash
+cd backend
+```
+
+### 2. Build the Docker image
+
+```bash
+docker compose build
+```
+
+or
+
+```bash
+docker build -t fastapi-backend .
+```
+
+### 3. Run the backend container
+
+Using Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Run in detached mode:
+
+```bash
+docker compose up -d --build
+```
+
+Using Docker only:
+
+```bash
+docker run -d -p 8000:8000 --name fastapi-backend fastapi-backend
+```
+
+### 4. Access the API
+
+Backend:
+
+```
+http://localhost:8000
+```
+
+Swagger UI:
+
+```
+http://localhost:8000/docs
+```
+
+### Useful Docker Commands
+
+View running containers:
+
+```bash
+docker ps
+```
+
+Stop the running container:
+
+```bash
+docker compose down
+```
+
+View logs:
+
+```bash
+docker compose logs
+```
+
+Rebuild after making code changes:
+
+```bash
+docker compose up --build
+```
+
+If Docker reports orphan containers:
+
+```bash
+docker compose up --build --remove-orphans
+```
+
+---
+
+
 ## 📂 Project Structure
 
 ```text
@@ -114,10 +214,12 @@ fastapi-demo-api/
 │   │   ├── utils/            # JWT & Security Utilities
 │   │   ├── database.py       # DB Connection Setup
 │   │   └── main.py           # Application Entrypoint & CORS
-│   │
-│   ├── patients.db           # SQLite Database
-│   ├── requirements.txt      # Python Dependencies
-│   └── feature*.md           # Documentation of development phases
+│  ├── Dockerfile
+├── docker-compose.yml
+├── .dockerignore
+├── patients.db
+├── requirements.txt
+└── feature*.md        # Documentation of development phases
 │
 └── frontend/                 # React Vite Application
     ├── package.json          # Node Dependencies
